@@ -15,7 +15,6 @@ import path                              from 'path';
 import fs                                from 'fs/promises';
 import { start_agent }                   from '../agent/loop';
 import { RuntimeAPI, AgentIdentity }     from './api';
-import { is_source_isolation_violation } from '../canon/auth';
 import { loadState, makeReceiptStore, commitFact, commitSystem } from '../memory/store';
 import { makeRegistry }                  from '../interfaces/organ';
 import { makeServiceRegistry }           from '../interfaces/service';
@@ -32,19 +31,6 @@ const fabric: Fabric<MEMState> = {
   dof, inv_mass, dof_bound: DOF_BOUND, inv_bound: INV_BOUND,
 };
 
-// Source Isolation: paths the agent cannot write to under any circumstance
-export const AGENT_WRITABLE_SCOPE = [
-  path.resolve(BODY_ROOT, 'workspace'),
-  path.resolve(BODY_ROOT, 'memory'),
-  path.resolve(BODY_ROOT, 'receipts'),
-  path.resolve(BODY_ROOT, 'registry'),
-] as const;
-
-export function agent_can_write(target: string): boolean {
-  if (is_source_isolation_violation(target)) return false;
-  const resolved = path.resolve(target);
-  return AGENT_WRITABLE_SCOPE.some(s => resolved.startsWith(s));
-}
 
 async function verify_body(): Promise<void> {
   const manifest = path.join(BODY_ROOT, 'manifest.json');

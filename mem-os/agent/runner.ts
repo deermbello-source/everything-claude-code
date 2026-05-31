@@ -105,10 +105,13 @@ export async function run(
     // Gate check — belt and suspenders on HumanPrimacy
     const gateResult = gate(api.fabric, current, next, step.action);
     if (!gateResult.ok) {
+      const reason = gateResult.reason === 'inadmissible'
+        ? `inadmissible: dof_delta=${gateResult.dof_delta}, inv_mass_delta=${gateResult.inv_mass_delta}`
+        : gateResult.reason;
       await api.writeReceipt(make_receipt(
         { ...step, action: `blocked:${step.action}` }, current, current, 'rejected',
       ));
-      opts.onRejected?.(step, gateResult.reason);
+      opts.onRejected?.(step, reason);
       continue;
     }
 

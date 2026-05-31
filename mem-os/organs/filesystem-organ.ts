@@ -32,11 +32,10 @@ export const filesystemOrgan: Organ = {
     });
 
     const fact: Fact = {
-      id:         `fact_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      content:    result,
-      source:     'filesystem',
-      timestamp:  Date.now(),
-      receipt_id: '',
+      id:        `fact_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      content:   result,
+      source:    'filesystem',
+      timestamp: Date.now(),
     };
 
     // Organs receive the current state. The runner owns step tracking.

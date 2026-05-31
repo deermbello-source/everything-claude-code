@@ -51,11 +51,11 @@ export const SOURCE_ISOLATED_DIRS = [
   'memory',
 ] as const;
 
+// Checks by path segment — not substring — to avoid false positives on paths
+// where a parent directory happens to share a name with a source dir (e.g. /home/agent/).
 export function is_source_isolation_violation(target_path: string): boolean {
-  return SOURCE_ISOLATED_DIRS.some(dir =>
-    target_path.replace(/\\/g, '/').includes(`/${dir}/`) ||
-    target_path.replace(/\\/g, '/').startsWith(`${dir}/`)
-  );
+  const segments = target_path.replace(/\\/g, '/').split('/').filter(Boolean);
+  return SOURCE_ISOLATED_DIRS.some(dir => segments.includes(dir));
 }
 
 // Every receipt records who authorized the transition
@@ -64,7 +64,8 @@ export interface AuthRecord {
   timestamp: number;
 }
 
+// Returns true only for sources that represent a completed, authorized transition.
+// Failure receipt types ('rejected', 'unresolved') are not authorized transitions.
 export function human_primacy(auth: AuthRecord): boolean {
-  return auth.source === 'human' || auth.source === 'canon' ||
-         auth.source === 'rejected' || auth.source === 'unresolved';
+  return auth.source === 'human' || auth.source === 'canon';
 }

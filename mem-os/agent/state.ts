@@ -2,11 +2,11 @@
 // Shared between agent and memory layer.
 
 export interface Fact {
-  id:         string;
-  content:    unknown;
-  source:     string;
-  timestamp:  number;
-  receipt_id: string;
+  id:          string;
+  content:     unknown;
+  source:      string;
+  timestamp:   number;
+  receipt_id?: string;   // linked after receipt is written; not available at organ execution time
 }
 
 export interface Step {

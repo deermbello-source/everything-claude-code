@@ -6,9 +6,8 @@ import fs   from 'fs/promises';
 import path from 'path';
 import { OrganRegistry } from '../interfaces/organ';
 
-const BODY_ROOT   = process.env.MEM_BODY_PATH ?? path.join(process.cwd(), 'mem-body');
-const QUARANTINE  = path.join(BODY_ROOT, 'quarantine');
-const REGISTRY_F  = path.join(BODY_ROOT, 'registry', 'quarantine.json');
+const BODY_ROOT  = process.env.MEM_BODY_PATH ?? path.join(process.cwd(), 'mem-body');
+const REGISTRY_F = path.join(BODY_ROOT, 'registry', 'quarantine.json');
 
 export type QuarantineStatus = 'quarantined' | 'promoted' | 'rejected';
 

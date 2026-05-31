@@ -3,19 +3,23 @@
 // It does not import from memory/, interfaces/, canon/, or runtime/.
 // Information flows downward. The agent cannot traverse upward.
 
-import * as readline             from 'readline';
-import { RuntimeAPI }            from '../runtime/api';
-import { intake }                from './intake';
-import { plan }                  from './planner';
-import { run }                   from './runner';
-import { omega, canonicality, drift_level } from '../canon/fabric';
-import { MEMState }              from './state';
+import * as readline  from 'readline';
+import { RuntimeAPI } from '../runtime/api';
+import { intake }     from './intake';
+import { plan }       from './planner';
+import { run }        from './runner';
+import { MEMState }   from './state';
 
+// Inline metrics — agent does not import from canon/ directly.
+// Fabric is accessed through api.fabric (the downward surface).
 function status(api: RuntimeAPI, state: MEMState): string {
-  const c = (canonicality(api.fabric, state) * 100).toFixed(1);
-  const d = (drift_level(api.fabric, state)  * 100).toFixed(1);
-  const Ω = omega(api.fabric, 1, 1, state).toFixed(0);
-  return `canonicality ${c}%  ·  drift ${d}%  ·  Ω ${Ω}`;
+  const F    = api.fabric;
+  const d    = F.dof(state);
+  const inv  = F.inv_mass(state);
+  const c    = F.inv_bound > 0 ? (inv / F.inv_bound * 100).toFixed(1) : '0.0';
+  const dr   = F.dof_bound > 0 ? (d   / F.dof_bound * 100).toFixed(1) : '0.0';
+  const Ω    = (d - inv).toFixed(0);   // α=1, β=1
+  return `canonicality ${c}%  ·  drift ${dr}%  ·  Ω ${Ω}`;
 }
 
 // Commands the agent understands — operating on what the runtime exposes
@@ -69,7 +73,7 @@ export async function start_agent(api: RuntimeAPI) {
     rl.question('> ', (raw) => {
       const trimmed = raw.trim();
       if (!trimmed)            { prompt(); return; }
-      if (trimmed === '/exit') { rl.close(); return; }
+      if (trimmed === '/exit') { rl.close(); process.exit(0); }
 
       (async () => {
         const handled = await handle_command(trimmed, api, state);
