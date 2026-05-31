@@ -20,8 +20,11 @@ import { makeRegistry }                  from '../interfaces/organ';
 import { makeServiceRegistry }           from '../interfaces/service';
 import { MEMState, dof, inv_mass, DOF_BOUND, INV_BOUND } from '../agent/state';
 import { Fabric }                        from '../canon/fabric';
+import { make_traversal_registry }       from '../canon/traversal-registry';
 import { filesystemOrgan }               from '../organs/filesystem-organ';
 import { filesystemService }             from '../services/filesystem';
+import { assimilate }                    from '../organs/assimilation';
+import { filter_output }                 from './output-filter';
 
 const VERSION    = '0.1.0';
 const SESSION_ID = `session_${Date.now()}`;
@@ -49,7 +52,6 @@ export interface RuntimeConfig {
 export async function boot(config: RuntimeConfig = {}) {
   await verify_body();
 
-  // Point SQLite at /mem-body/memory/
   process.env['MEM_DB_PATH'] = config.db_path
     ?? path.join(BODY_ROOT, 'memory', 'mem.db');
 
@@ -59,20 +61,27 @@ export async function boot(config: RuntimeConfig = {}) {
   const organs   = makeRegistry();
   const services = makeServiceRegistry();
   const receipts = makeReceiptStore();
+  const tregistry = make_traversal_registry();
 
-  // Register built-in organs and services (pre-promoted, trusted)
+  // Register built-in services first (needed by organs)
   services.register(filesystemService);
-  organs.register(filesystemOrgan);
+
+  // Built-in organs pass through assimilation (classify + wrap) then register directly.
+  // They skip quarantine — they are pre-trusted, but still governed by the wrap surface.
+  const { organ: fsOrgan } = assimilate(filesystemOrgan);
+  organs.register(fsOrgan);
 
   const identity: AgentIdentity = {
     name:         'MEM',
     version:      VERSION,
     session_id:   SESSION_ID,
-    capabilities: ['intake', 'plan', 'route', 'run', 'verify', 'remember', 'filesystem'],
+    capabilities: [
+      'intake', 'plan', 'proposal', 'route', 'run',
+      'lawful-becoming', 'forbidden-scan', 'traversal-registry',
+      'verify', 'remember', 'filesystem',
+    ],
   };
 
-  // Construct the API surface — the agent's complete universe.
-  // Nothing above this surface is reachable from the agent.
   const api: RuntimeAPI = {
     identity,
     fabric,
@@ -80,22 +89,30 @@ export async function boot(config: RuntimeConfig = {}) {
     writeReceipt: (r)   => receipts.write(r),
     readReceipts: (n)   => receipts.latest(n),
     queryRegistry:(intent) => organs.list().filter(o => o.handles(intent)),
-    invokeOrgan:  async (step, state) => {
+
+    invokeOrgan: async (step, state) => {
       const organ = organs.get(step.organ);
       if (!organ) throw new Error(`No organ: ${step.organ}`);
-      const next = await organ.execute(step, state);
-      // Persist any new facts/systems the organ added — agent cannot call commitFact directly
-      for (const fact of next.facts.slice(state.facts.length)) {
+      const raw_next = await organ.execute(step, state);
+      // Persist new facts/systems — agent cannot call commitFact directly
+      for (const fact of raw_next.facts.slice(state.facts.length)) {
         commitFact(fact);
       }
-      for (const sys of next.systems.slice(state.systems.length)) {
+      for (const sys of raw_next.systems.slice(state.systems.length)) {
         commitSystem(sys);
       }
-      return next;
+      // Filter runtime internals before returning to the runner
+      return filter_output(raw_next);
     },
+
+    traversalStats: () => ({
+      down: tregistry.down_count(),
+      up:   tregistry.up_count(),
+      last: tregistry.last_entry()?.traversal ?? null,
+    }),
   };
 
-  await start_agent(api);
+  await start_agent(api, tregistry);
 }
 
 boot().catch(err => {

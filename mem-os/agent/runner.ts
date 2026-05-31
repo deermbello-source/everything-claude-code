@@ -7,8 +7,12 @@ import { MEMState, Step, dof, inv_mass } from './state';
 import { RuntimeAPI }                    from '../runtime/api';
 import { gate }                          from './gate';
 import { verify }                        from './verifier';
+import { lawful_becoming }               from './lawful-becoming';
 import { Receipt }                       from '../memory/receipts';
 import { requires_human_gate }           from '../canon/auth';
+import { forbidden_scan }                from '../canon/forbidden';
+import { TraversalRegistry }             from '../canon/traversal-registry';
+import { TraversalDir }                  from '../canon/ops';
 
 export interface HumanAuthRequest {
   step:    Step;
@@ -21,6 +25,7 @@ export interface RunnerOptions {
   onUnresolved?:        (step: Step) => void;
   onRejected?:          (step: Step, reason: string) => void;
   onSecurityViolation?: (step: Step, attempted_path: string) => void;
+  traversalRegistry?:   TraversalRegistry;
 }
 
 function make_receipt(step: Step, before: MEMState, after: MEMState, auth: Receipt['auth']): Receipt {
@@ -55,6 +60,20 @@ export async function run(
       continue;
     }
 
+    // Traversal chain check — down-down is forbidden
+    const params    = step.params as Record<string, unknown>;
+    const traversal = params.traversal as TraversalDir | undefined;
+    if (traversal && opts.traversalRegistry) {
+      const tcheck = opts.traversalRegistry.check(traversal);
+      if (!tcheck.ok) {
+        await api.writeReceipt(make_receipt(
+          { ...step, action: `blocked:${step.action}` }, current, current, 'rejected',
+        ));
+        opts.onRejected?.(step, tcheck.reason ?? 'traversal chain violation');
+        continue;
+      }
+    }
+
     // Pre-execution: human authorization — organ flag OR action-level gate prefix
     if (step.requires_human_auth || requires_human_gate(step.action)) {
       const approved = await new Promise<boolean>(resolve => {
@@ -77,7 +96,6 @@ export async function run(
       const e = err as { code?: string; attempted_path?: string; message?: string };
 
       if (e?.code === 'WORKSPACE_BOUNDARY_VIOLATION') {
-        // Security receipt — no write, no state change, proof of block
         await api.writeReceipt(make_receipt(
           { ...step, action: `security_blocked:${step.action}` }, current, current, 'canon',
         ));
@@ -92,7 +110,29 @@ export async function run(
       continue;
     }
 
-    // Verify result satisfies Canon
+    // LawfulBecoming — verify derivation before Canon check
+    const becoming = lawful_becoming(step, current, next);
+    if (!becoming.lawful) {
+      const detail = becoming.violations.map(v => `${v.type}: ${v.detail}`).join('; ');
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `unlawful:${step.action}` }, current, current, 'rejected',
+      ));
+      opts.onRejected?.(step, `LawfulBecoming: ${detail}`);
+      continue;
+    }
+
+    // ForbiddenTransformation — scan for the seven structural violations
+    const fscan = forbidden_scan(step, current, next);
+    if (!fscan.clean) {
+      const detail = fscan.violations.map(v => `${v.type}: ${v.detail}`).join('; ');
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `forbidden:${step.action}` }, current, current, 'rejected',
+      ));
+      opts.onRejected?.(step, `ForbiddenTransformation: ${detail}`);
+      continue;
+    }
+
+    // Canon verification — structural bounds and minmax_law
     const check = verify(api.fabric, current, next);
     if (!check.valid) {
       await api.writeReceipt(make_receipt(
@@ -115,8 +155,11 @@ export async function run(
       continue;
     }
 
-    // Commit: write receipt and advance state
+    // Commit: write receipt, record traversal, advance state
     await api.writeReceipt(make_receipt(step, current, next, gateResult.auth));
+    if (traversal && opts.traversalRegistry) {
+      opts.traversalRegistry.record(traversal, step.id);
+    }
     current = next;
   }
 

@@ -2,11 +2,12 @@
 // Shared between agent and memory layer.
 
 export interface Fact {
-  id:          string;
-  content:     unknown;
-  source:      string;
-  timestamp:   number;
-  receipt_id?: string;   // linked after receipt is written; not available at organ execution time
+  id:           string;
+  content:      unknown;
+  source:       string;
+  timestamp:    number;
+  receipt_id?:  string;   // linked after receipt is written; not available at organ execution time
+  layer?:       'canonical' | 'simulation';  // undefined treated as 'canonical'
 }
 
 export interface Step {
@@ -38,9 +39,20 @@ export function dof(s: MEMState): number {
   return (s.active_intent !== null ? 1 : 0) + s.open_steps.length;
 }
 
-// inv_mass: committed knowledge — only grows, never shrinks
+// inv_mass: canonical committed knowledge — only grows, never shrinks
+// Simulation-layer facts are excluded; they have not been promoted to canonical state.
 export function inv_mass(s: MEMState): number {
-  return s.facts.length + s.systems.length;
+  return s.facts.filter(f => (f.layer ?? 'canonical') === 'canonical').length + s.systems.length;
+}
+
+// Canonical facts only — promoted, committed knowledge
+export function canonical_facts(s: MEMState): Fact[] {
+  return s.facts.filter(f => (f.layer ?? 'canonical') === 'canonical');
+}
+
+// Simulation facts — sandbox / what-if, not yet promoted
+export function simulation_facts(s: MEMState): Fact[] {
+  return s.facts.filter(f => f.layer === 'simulation');
 }
 
 export const DOF_BOUND = 1000;

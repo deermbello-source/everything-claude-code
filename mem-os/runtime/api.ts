@@ -13,11 +13,12 @@
 // The agent may not inspect the implementation that defines those things.
 // Nothing above this surface exists from the agent's perspective.
 
-import { MEMState, Step } from '../agent/state';
-import { Intent }         from '../agent/intake';
-import { Receipt }        from '../memory/receipts';
-import { Organ }          from '../interfaces/organ';
-import { Fabric }         from '../canon/fabric';
+import { MEMState, Step }  from '../agent/state';
+import { Intent }          from '../agent/intake';
+import { Receipt }         from '../memory/receipts';
+import { Organ }           from '../interfaces/organ';
+import { Fabric }          from '../canon/fabric';
+import { TraversalDir }    from '../canon/ops';
 
 // What the agent knows about itself — operational metadata, not source.
 // Enough to make planning decisions. Not enough to reason over implementation.
@@ -40,6 +41,10 @@ export interface RuntimeAPI {
   readReceipts: (n: number)                 => Promise<Receipt[]>;
 
   // Capability operations — runtime-mediated, cannot bypass gate
-  queryRegistry:(intent: Intent)            => Organ[];
-  invokeOrgan:  (step: Step, state: MEMState) => Promise<MEMState>;
+  queryRegistry:   (intent: Intent)              => Organ[];
+  invokeOrgan:     (step: Step, state: MEMState) => Promise<MEMState>;
+
+  // Traversal stats — read-only view of session traversal ledger
+  // The agent cannot modify the registry; it can only read aggregate state
+  traversalStats:  () => { down: number; up: number; last: TraversalDir | null };
 }

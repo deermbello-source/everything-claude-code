@@ -1,6 +1,6 @@
 // Agent loop — the agent process.
-// Receives a RuntimeAPI. That is its complete world.
-// It does not import from memory/, interfaces/, canon/, or runtime/.
+// Receives a RuntimeAPI and TraversalRegistry. That is its complete world.
+// It does not import from memory/, interfaces/, or runtime/.
 // Information flows downward. The agent cannot traverse upward.
 
 import * as readline  from 'readline';
@@ -9,9 +9,10 @@ import { intake }     from './intake';
 import { plan }       from './planner';
 import { run }        from './runner';
 import { MEMState }   from './state';
+import { TraversalRegistry } from '../canon/traversal-registry';
 
-// Inline metrics — agent does not import from canon/ directly.
-// Fabric is accessed through api.fabric (the downward surface).
+// Inline metrics — agent does not import from canon/fabric directly.
+// Fabric and traversalStats are accessed through the governed API surface.
 function status(api: RuntimeAPI, state: MEMState): string {
   const F    = api.fabric;
   const d    = F.dof(state);
@@ -19,7 +20,9 @@ function status(api: RuntimeAPI, state: MEMState): string {
   const c    = F.inv_bound > 0 ? (inv / F.inv_bound * 100).toFixed(1) : '0.0';
   const dr   = F.dof_bound > 0 ? (d   / F.dof_bound * 100).toFixed(1) : '0.0';
   const Ω    = (d - inv).toFixed(0);   // α=1, β=1
-  return `canonicality ${c}%  ·  drift ${dr}%  ·  Ω ${Ω}`;
+  const ts   = api.traversalStats();
+  const tstr = ts.last ? `  ·  ↓${ts.down} ↑${ts.up} last:${ts.last}` : '';
+  return `canonicality ${c}%  ·  drift ${dr}%  ·  Ω ${Ω}${tstr}`;
 }
 
 // Traversal symbol map — inline, no canon import needed (values flow from Intent)
@@ -27,6 +30,7 @@ const TSYM: Record<string, string> = {
   reverse: '↰', abstraction: '↱', reflective: '↲',
   propagation: '↳', instantiation: '↴', forward: '→',
 };
+
 async function handle_command(
   cmd:   string,
   api:   RuntimeAPI,
@@ -65,7 +69,7 @@ async function handle_command(
   }
 }
 
-export async function start_agent(api: RuntimeAPI) {
+export async function start_agent(api: RuntimeAPI, tregistry: TraversalRegistry) {
   const rl    = readline.createInterface({ input: process.stdin, output: process.stdout });
   let   state = await api.readState();
 
@@ -88,20 +92,30 @@ export async function start_agent(api: RuntimeAPI) {
         const steps  = plan(intent, state, api);
 
         state = await run(steps, state, api, {
+          traversalRegistry: tregistry,
+
           onHumanAuthRequired: ({ step, resolve }) => {
             rl.question(`\n  Authorize: ${step.action} [y/N] `, ans => {
               resolve(ans.trim().toLowerCase() === 'y');
               console.log('');
             });
           },
+
           onUnresolved: (step) => {
-            const p = step.params as { intent_action?: string; intent_domain?: string };
-            console.log(`\n  No organ for "${p.intent_action ?? 'unknown'}"${p.intent_domain ? ` in ${p.intent_domain}` : ''}.`);
-            console.log('  Register an organ to handle this intent.\n');
+            const p = step.params as { reason?: string; status?: string; intent_action?: string; intent_domain?: string };
+            if (step.action.startsWith('proposal:')) {
+              const pstatus = step.action.replace('proposal:', '');
+              console.log(`\n  Proposal ${pstatus}: ${p.reason ?? 'rejected'}\n`);
+            } else {
+              console.log(`\n  No organ for "${p.intent_action ?? 'unknown'}"${p.intent_domain ? ` in ${p.intent_domain}` : ''}.`);
+              console.log('  Register an organ to handle this intent.\n');
+            }
           },
+
           onRejected: (_step, reason) => {
             console.log(`\n  Rejected: ${reason}\n`);
           },
+
           onSecurityViolation: (step, attempted) => {
             console.log(`\n  ■ SECURITY: WorkspaceBoundary blocked ${step.action}`);
             console.log(`    attempted path: ${attempted}`);
