@@ -1,0 +1,19 @@
+{
+  "name": "mem-os",
+  "version": "0.1.0",
+  "description": "Personal governed runtime. Canon kernel. Full self. Human primacy.",
+  "scripts": {
+    "init":  "ts-node scripts/init-body.ts",
+    "start": "ts-node runtime/process.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}
