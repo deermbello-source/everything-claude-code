@@ -1,24 +1,35 @@
 // Agent intake — receives intent from any source, normalizes it.
-// The agent's front door.
+// Every intent is classified for semantic operation and traversal direction
+// before it reaches the planner. Classification precedes all execution.
+
+import { SemanticOp, TraversalDir, classify_semantic_op, classify_traversal } from '../canon/ops';
+
+export type { SemanticOp, TraversalDir };
 
 export interface Intent {
-  id:        string;
-  raw:       string;
-  action:    string;
-  domain:    string | null;
-  params:    Record<string, unknown>;
-  timestamp: number;
+  id:           string;
+  raw:          string;
+  action:       string;
+  domain:       string | null;
+  semantic_op:  SemanticOp;    // what the transformation does to structure
+  traversal:    TraversalDir;  // which direction to move through the system
+  params:       Record<string, unknown>;
+  timestamp:    number;
 }
 
 export function intake(raw: string): Intent {
-  const trimmed = raw.trim();
+  const trimmed    = raw.trim();
+  const semantic_op = classify_semantic_op(trimmed);
+  const traversal   = classify_traversal(trimmed);
   return {
-    id:        `intent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    raw:       trimmed,
-    action:    parse_action(trimmed),
-    domain:    parse_domain(trimmed),
-    params:    { raw: trimmed },   // raw passes through for organ-level extraction
-    timestamp: Date.now(),
+    id:          `intent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    raw:         trimmed,
+    action:      parse_action(trimmed),
+    domain:      parse_domain(trimmed),
+    semantic_op,
+    traversal,
+    params:      { raw: trimmed, semantic_op, traversal },
+    timestamp:   Date.now(),
   };
 }
 

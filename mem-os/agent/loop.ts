@@ -22,7 +22,11 @@ function status(api: RuntimeAPI, state: MEMState): string {
   return `canonicality ${c}%  ·  drift ${dr}%  ·  Ω ${Ω}`;
 }
 
-// Commands the agent understands — operating on what the runtime exposes
+// Traversal symbol map — inline, no canon import needed (values flow from Intent)
+const TSYM: Record<string, string> = {
+  reverse: '↰', abstraction: '↱', reflective: '↲',
+  propagation: '↳', instantiation: '↴', forward: '→',
+};
 async function handle_command(
   cmd:   string,
   api:   RuntimeAPI,
@@ -80,6 +84,7 @@ export async function start_agent(api: RuntimeAPI) {
         if (handled) { prompt(); return; }
 
         const intent = intake(trimmed);
+        console.log(`  ${intent.semantic_op} ${TSYM[intent.traversal] ?? '→'}  ${intent.action}${intent.domain ? `  [${intent.domain}]` : ''}`);
         const steps  = plan(intent, state, api);
 
         state = await run(steps, state, api, {
