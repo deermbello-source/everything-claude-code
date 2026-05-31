@@ -8,6 +8,7 @@ import { RuntimeAPI }                    from '../runtime/api';
 import { gate }                          from './gate';
 import { verify }                        from './verifier';
 import { Receipt }                       from '../memory/receipts';
+import { requires_human_gate }           from '../canon/auth';
 
 export interface HumanAuthRequest {
   step:    Step;
@@ -54,8 +55,8 @@ export async function run(
       continue;
     }
 
-    // Pre-execution: human authorization gate
-    if (step.requires_human_auth) {
+    // Pre-execution: human authorization — organ flag OR action-level gate prefix
+    if (step.requires_human_auth || requires_human_gate(step.action)) {
       const approved = await new Promise<boolean>(resolve => {
         opts.onHumanAuthRequired({ step, state: current, resolve });
       });
