@@ -6,7 +6,7 @@
 // HumanPrimacy:     the agent cannot decide what it is allowed to do
 // Source Isolation: the agent cannot reach the code that defines what it is
 
-export type AuthSource = 'human' | 'canon';
+export type AuthSource = 'human' | 'canon' | 'rejected' | 'unresolved';
 
 // HumanPrimacy violations — permanently inadmissible.
 // No organ, governor, or expansion can produce these actions.
@@ -65,5 +65,6 @@ export interface AuthRecord {
 }
 
 export function human_primacy(auth: AuthRecord): boolean {
-  return auth.source === 'human' || auth.source === 'canon';
+  return auth.source === 'human' || auth.source === 'canon' ||
+         auth.source === 'rejected' || auth.source === 'unresolved';
 }

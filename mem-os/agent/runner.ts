@@ -1,7 +1,7 @@
 // Agent runner — executes steps through the RuntimeAPI.
 // The agent does not call organs directly.
 // Every invocation is mediated by the runtime.
-// WorkspaceBoundaryViolation → security receipt, no state change, no write.
+// Every step outcome — success or failure — writes a receipt. No silent skips.
 
 import { MEMState, Step, dof, inv_mass } from './state';
 import { RuntimeAPI }                    from '../runtime/api';
@@ -47,6 +47,9 @@ export async function run(
 
   for (const step of steps) {
     if (step.organ === '__unresolved__') {
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `unresolved:${step.action}` }, current, current, 'unresolved',
+      ));
       opts.onUnresolved?.(step);
       continue;
     }
@@ -57,6 +60,9 @@ export async function run(
         opts.onHumanAuthRequired({ step, state: current, resolve });
       });
       if (!approved) {
+        await api.writeReceipt(make_receipt(
+          { ...step, action: `denied:${step.action}` }, current, current, 'rejected',
+        ));
         opts.onRejected?.(step, 'human denied');
         continue;
       }
@@ -71,12 +77,16 @@ export async function run(
 
       if (e?.code === 'WORKSPACE_BOUNDARY_VIOLATION') {
         // Security receipt — no write, no state change, proof of block
-        const security_step: Step = { ...step, action: `security_blocked:${step.action}` };
-        await api.writeReceipt(make_receipt(security_step, current, current, 'canon'));
+        await api.writeReceipt(make_receipt(
+          { ...step, action: `security_blocked:${step.action}` }, current, current, 'canon',
+        ));
         opts.onSecurityViolation?.(step, e.attempted_path ?? 'unknown');
         continue;
       }
 
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `error:${step.action}` }, current, current, 'rejected',
+      ));
       opts.onRejected?.(step, e?.message ?? String(err));
       continue;
     }
@@ -84,6 +94,9 @@ export async function run(
     // Verify result satisfies Canon
     const check = verify(api.fabric, current, next);
     if (!check.valid) {
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `invalid:${step.action}` }, current, current, 'rejected',
+      ));
       opts.onRejected?.(step, check.reason ?? 'Canon violation');
       continue;
     }
@@ -91,6 +104,9 @@ export async function run(
     // Gate check — belt and suspenders on HumanPrimacy
     const gateResult = gate(api.fabric, current, next, step.action);
     if (!gateResult.ok) {
+      await api.writeReceipt(make_receipt(
+        { ...step, action: `blocked:${step.action}` }, current, current, 'rejected',
+      ));
       opts.onRejected?.(step, gateResult.reason);
       continue;
     }
