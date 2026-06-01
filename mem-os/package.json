@@ -5,14 +5,25 @@
   "scripts": {
     "init":  "ts-node scripts/init-body.ts",
     "start": "ts-node runtime/process.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test":  "jest"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.ts"],
+    "transform": {
+      "^.+\\.tsx?$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+    }
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.0"
   }
